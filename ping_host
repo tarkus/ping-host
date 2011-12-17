@@ -1,0 +1,62 @@
+#!/usr/bin/env python2.7
+
+
+import os
+import argparse
+import subprocess
+from Queue import Queue
+from threading import Thread
+import time
+import re
+
+num_threads = 100
+queue = Queue()
+stat = []
+
+def ping():
+    while True:
+        try:
+            ip = queue.get()
+        except Queue.Empty:
+            return
+
+        try:
+            output = subprocess.check_output("ping -c 5 %s" % ip, shell=True, stderr=subprocess.STDOUT)
+            line = output.rstrip().split("\n").pop()
+            pattern = re.compile("round-trip min/avg/max/stddev = [0-9\.]+/([0-9\.]+)/[0-9\.]+/[0-9\.]+ ms")
+            m = pattern.match(line)
+            if m is not None:
+                avgtime = m.group(1)
+                print "%s: %s" % (ip, avgtime)
+                stat.append((ip, avgtime))
+        except subprocess.CalledProcessError:
+            pass
+        finally:
+            time.sleep(3)
+            queue.task_done()
+
+def main():
+    parser = argparse.ArgumentParser(description="ping multiple hosts")
+    parser.add_argument("-f", "--file", help="a file contain host list, one line one host")
+    parser.add_argument("hosts", nargs="*", metavar="HOST", help="host to ping")
+    args = parser.parse_args()
+
+    if args.file is not None:
+        try:
+            args.hosts += open(args.file).readlines()
+        except IOError:
+            pass
+
+    for ip in args.hosts:
+        queue.put(ip.strip())
+
+    for i in range(num_threads):
+        worker = Thread(target=ping)
+        worker.setDaemon(True)
+        worker.start()
+
+    queue.join()
+    print "Done."
+
+if __name__ == "__main__":
+    main()
