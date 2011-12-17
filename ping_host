@@ -43,7 +43,11 @@ def main():
 
     if args.file is not None:
         try:
-            args.hosts += open(args.file).readlines()
+            for line in open(args.file).readlines():
+                line = line.strip()
+                if line == "" or line[0] == "#":
+                    continue
+                args.hosts.append(line) 
         except IOError:
             pass
 
@@ -56,7 +60,6 @@ def main():
         worker.start()
 
     queue.join()
-    print "Done."
 
 if __name__ == "__main__":
     main()
